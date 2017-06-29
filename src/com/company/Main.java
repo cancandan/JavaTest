@@ -8,11 +8,12 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Main {
-    static Map<String, Integer> libCounts = new ConcurrentHashMap<String, Integer>();
+    static Map<String, AtomicInteger> libCounts = new ConcurrentHashMap<String, AtomicInteger>();
 
     public static void main(String[] args) {
         try {
@@ -95,7 +96,7 @@ public class Main {
     }
 
     static void displayTopNLibs() {
-        Map<String, Integer> map = sortByValues(libCounts);
+        Map<String, Integer> map = getLibCountsMapSortedByValue();
         Set eset = map.entrySet();
         Iterator it = eset.iterator();
         int count = 0;
@@ -108,8 +109,17 @@ public class Main {
         }
     }
 
-    static Map sortByValues(Map map) {
-        List list = new LinkedList(map.entrySet());
+    static Map getLibCountsMapSortedByValue() {
+        // Since AtomicInteger is not comparable, turn it into a hashmap with Integer values
+        Map<String, Integer> normalMap = new HashMap<String, Integer>();
+        Set eset=libCounts.entrySet();
+        Iterator it= eset.iterator();
+        while (it.hasNext()) {
+            Map.Entry me = (Map.Entry) it.next();
+            normalMap.put(me.getKey().toString(), new Integer(((AtomicInteger) me.getValue()).get()));
+        }
+
+        List list = new LinkedList(normalMap.entrySet());
         Collections.sort(list, new Comparator() {
             public int compare(Object o1, Object o2) {
                 return -1 * ((Comparable) ((Map.Entry) (o1)).getValue())
@@ -118,7 +128,7 @@ public class Main {
         });
 
         HashMap sortedHashMap = new LinkedHashMap();
-        for (Iterator it = list.iterator(); it.hasNext(); ) {
+        for (it = list.iterator(); it.hasNext(); ) {
             Map.Entry entry = (Map.Entry) it.next();
             sortedHashMap.put(entry.getKey(), entry.getValue());
         }
@@ -141,11 +151,10 @@ public class Main {
                 Set<String> libs = getJavascriptLibNames(content);
                 if (!libs.isEmpty()) {
                     for (String lib : libs) {
-                        Integer oldVal = libCounts.get(lib);
-                        if (oldVal != null) {
-                            libCounts.put(lib, oldVal + 1);
-                        } else {
-                            libCounts.put(lib, 1);
+                        AtomicInteger count= new AtomicInteger(1);
+                        AtomicInteger countRet= libCounts.putIfAbsent(lib, count);
+                        if (countRet!=null) {
+                            countRet.incrementAndGet();
                         }
                     }
                 }
